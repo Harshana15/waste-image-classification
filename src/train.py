@@ -5,6 +5,7 @@ from torchvision import datasets, transforms, models
 from torch.utils.data import DataLoader, random_split
 import matplotlib.pyplot as plt
 import os
+from model import build_model
 
 # ── 1. Device ─────────────────────────────────────────────
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
