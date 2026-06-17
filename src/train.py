@@ -7,11 +7,11 @@ import matplotlib.pyplot as plt
 import os
 from model import build_model
 
-# ── 1. Device ─────────────────────────────────────────────
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# ── 2. Data ───────────────────────────────────────────────
+
 DATA_DIR = "./data"
 
 train_transform = transforms.Compose([
@@ -43,7 +43,7 @@ val_loader = DataLoader(val_set, batch_size=32, shuffle=False, num_workers=0)
 
 print(f"Train: {len(train_set)} | Val: {len(val_set)} | Test: {len(test_set)}")
 
-# ── 3. Model ──────────────────────────────────────────────
+
 model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
 for param in model.parameters():
     param.requires_grad = False
@@ -57,11 +57,11 @@ model.fc = nn.Sequential(
 )
 model = model.to(device)
 
-# ── 4. Loss & Optimizer ───────────────────────────────────
+
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.fc.parameters(), lr=0.001)
 
-# ── 5. Training Loop ──────────────────────────────────────
+
 EPOCHS = 20
 best_val_acc = 0.0
 train_losses, val_losses = [], []
@@ -70,7 +70,7 @@ train_accs, val_accs = [], []
 os.makedirs("saved_models", exist_ok=True)
 
 for epoch in range(EPOCHS):
-    # Training
+   
     model.train()
     train_loss, train_correct = 0, 0
     for images, labels in train_loader:
@@ -83,7 +83,7 @@ for epoch in range(EPOCHS):
         train_loss += loss.item()
         train_correct += (outputs.argmax(1) == labels).sum().item()
 
-    # Validation
+  
     model.eval()
     val_loss, val_correct = 0, 0
     with torch.no_grad():
@@ -94,7 +94,7 @@ for epoch in range(EPOCHS):
             val_loss += loss.item()
             val_correct += (outputs.argmax(1) == labels).sum().item()
 
-    # Metrics
+   
     train_acc = train_correct / len(train_set)
     val_acc = val_correct / len(val_set)
     train_losses.append(train_loss / len(train_loader))
@@ -104,13 +104,13 @@ for epoch in range(EPOCHS):
 
     print(f"Epoch {epoch+1}/{EPOCHS} | Train Loss: {train_loss/len(train_loader):.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss/len(val_loader):.4f} | Val Acc: {val_acc:.4f}")
 
-    # Save best model
+    
     if val_acc > best_val_acc:
         best_val_acc = val_acc
         torch.save(model.state_dict(), "saved_models/best_model.pth")
         print(f"Best model saved with Val Acc: {val_acc:.4f}")
 
-# ── 6. Plot Results ───────────────────────────────────────
+
 plt.figure(figsize=(12, 4))
 plt.subplot(1, 2, 1)
 plt.plot(train_losses, label="Train Loss")

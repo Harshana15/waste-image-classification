@@ -12,17 +12,11 @@ from skimage.segmentation import mark_boundaries
 
 import matplotlib.pyplot as plt
 
-# ----------------------------------------
-# Device
-# ----------------------------------------
 
 device = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
 )
 
-# ----------------------------------------
-# Class Names
-# ----------------------------------------
 
 class_names = [
     'Cardboard',
@@ -36,9 +30,6 @@ class_names = [
     'Vegetation'
 ]
 
-# ----------------------------------------
-# Load Model
-# ----------------------------------------
 
 model = models.resnet50(weights=None)
 
@@ -61,9 +52,6 @@ model.load_state_dict(
 model.to(device)
 model.eval()
 
-# ----------------------------------------
-# Image
-# ----------------------------------------
 
 IMAGE_PATH = input(
     "Enter image path: "
@@ -73,9 +61,6 @@ image = Image.open(
     IMAGE_PATH
 ).convert("RGB")
 
-# ----------------------------------------
-# Transform
-# ----------------------------------------
 
 transform = transforms.Compose([
     transforms.Resize((224,224)),
@@ -86,9 +71,6 @@ transform = transforms.Compose([
     )
 ])
 
-# ----------------------------------------
-# Prediction Function
-# ----------------------------------------
 
 def predict(images):
 
@@ -121,9 +103,6 @@ def predict(images):
 
     return probs.cpu().numpy()
 
-# ----------------------------------------
-# LIME Explainer
-# ----------------------------------------
 
 explainer = lime_image.LimeImageExplainer()
 
@@ -137,9 +116,6 @@ explanation = explainer.explain_instance(
     num_samples=1000
 )
 
-# ----------------------------------------
-# Get Explanation
-# ----------------------------------------
 
 temp, mask = explanation.get_image_and_mask(
     explanation.top_labels[0],
@@ -148,9 +124,7 @@ temp, mask = explanation.get_image_and_mask(
     hide_rest=False
 )
 
-# ----------------------------------------
-# Display
-# ----------------------------------------
+
 
 plt.figure(figsize=(8,8))
 

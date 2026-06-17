@@ -8,9 +8,6 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-# --------------------------------------------------
-# Load Model
-# --------------------------------------------------
 
 device = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
@@ -49,9 +46,6 @@ model.load_state_dict(
 model.to(device)
 model.eval()
 
-# --------------------------------------------------
-# Image Transform
-# --------------------------------------------------
 
 transform = transforms.Compose([
     transforms.Resize((224,224)),
@@ -62,9 +56,6 @@ transform = transforms.Compose([
     )
 ])
 
-# --------------------------------------------------
-# Select Image
-# --------------------------------------------------
 
 
 ''' import glob
@@ -82,9 +73,6 @@ image = Image.open(IMAGE_PATH).convert("RGB")
 
 input_tensor = transform(image).unsqueeze(0).to(device)
 
-# --------------------------------------------------
-# Hooks
-# --------------------------------------------------
 
 gradients = None
 activations = None
@@ -102,9 +90,6 @@ target_layer = model.layer4[-1]
 target_layer.register_forward_hook(forward_hook)
 target_layer.register_full_backward_hook(backward_hook)
 
-# --------------------------------------------------
-# Forward Pass
-# --------------------------------------------------
 
 output = model(input_tensor)
 
@@ -115,17 +100,11 @@ print(
     class_names[pred_class]
 )
 
-# --------------------------------------------------
-# Backward Pass
-# --------------------------------------------------
 
 model.zero_grad()
 
 output[:, pred_class].backward()
 
-# --------------------------------------------------
-# Grad-CAM
-# --------------------------------------------------
 
 pooled_gradients = torch.mean(
     gradients,
@@ -146,9 +125,6 @@ heatmap = np.maximum(heatmap, 0)
 
 heatmap /= heatmap.max()
 
-# --------------------------------------------------
-# Overlay Heatmap
-# --------------------------------------------------
 
 img = cv2.imread(IMAGE_PATH)
 
@@ -176,9 +152,6 @@ heatmap = cv2.cvtColor(
 
 superimposed = heatmap * 0.4 + img
 
-# --------------------------------------------------
-# Display
-# --------------------------------------------------
 
 plt.figure(figsize=(10,5))
 

@@ -12,19 +12,12 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# -------------------------------------------------
-# Device
-# -------------------------------------------------
 
 device = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
 )
 
 print("Using:", device)
-
-# -------------------------------------------------
-# Dataset
-# -------------------------------------------------
 
 DATA_DIR = "./data"
 
@@ -61,9 +54,6 @@ test_loader = DataLoader(
     shuffle=False
 )
 
-# -------------------------------------------------
-# Model
-# -------------------------------------------------
 
 model = models.resnet50(
     weights=None
@@ -88,10 +78,6 @@ model.load_state_dict(
 model.to(device)
 model.eval()
 
-# -------------------------------------------------
-# Prediction
-# -------------------------------------------------
-
 all_preds = []
 all_labels = []
 
@@ -108,9 +94,6 @@ with torch.no_grad():
         all_preds.extend(preds.cpu().numpy())
         all_labels.extend(labels.numpy())
 
-# -------------------------------------------------
-# Accuracy
-# -------------------------------------------------
 
 acc = accuracy_score(
     all_labels,
@@ -119,9 +102,6 @@ acc = accuracy_score(
 
 print(f"\nTest Accuracy: {acc:.4f}")
 
-# -------------------------------------------------
-# Classification Report
-# -------------------------------------------------
 
 print("\nClassification Report:\n")
 
@@ -133,9 +113,6 @@ print(
     )
 )
 
-# -------------------------------------------------
-# Confusion Matrix
-# -------------------------------------------------
 
 cm = confusion_matrix(
     all_labels,

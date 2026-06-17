@@ -11,9 +11,6 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from torch.utils.data import random_split
 
-# --------------------------------------------------
-# Device
-# --------------------------------------------------
 
 device = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
@@ -21,9 +18,6 @@ device = torch.device(
 
 print(f"Using device: {device}")
 
-# --------------------------------------------------
-# Transform
-# --------------------------------------------------
 
 train_transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -40,9 +34,6 @@ train_transform = transforms.Compose([
     )
 ])
 
-# --------------------------------------------------
-# Load Full Dataset
-# --------------------------------------------------
 
 full_dataset = datasets.ImageFolder(
     root="./data",
@@ -54,9 +45,6 @@ print("All Classes:", full_dataset.classes)
 glass_idx = full_dataset.class_to_idx["Glass"]
 plastic_idx = full_dataset.class_to_idx["Plastic"]
 
-# --------------------------------------------------
-# Create Glass-Plastic Dataset
-# --------------------------------------------------
 
 class GlassPlasticDataset(Dataset):
 
@@ -91,9 +79,6 @@ dataset = GlassPlasticDataset(full_dataset)
 
 print("Glass + Plastic Images:", len(dataset))
 
-# --------------------------------------------------
-# Split Dataset
-# --------------------------------------------------
 
 total = len(dataset)
 
@@ -126,9 +111,6 @@ val_loader = DataLoader(
     num_workers=0
 )
 
-# --------------------------------------------------
-# Model
-# --------------------------------------------------
 
 model = models.resnet50(
     weights=models.ResNet50_Weights.IMAGENET1K_V1
@@ -148,9 +130,6 @@ model.fc = nn.Sequential(
 
 model = model.to(device)
 
-# --------------------------------------------------
-# Loss Function
-# --------------------------------------------------
 
 criterion = nn.CrossEntropyLoss()
 
@@ -159,9 +138,6 @@ optimizer = optim.Adam(
     lr=0.001
 )
 
-# --------------------------------------------------
-# Training
-# --------------------------------------------------
 
 EPOCHS = 15
 
@@ -174,9 +150,6 @@ os.makedirs(
 
 for epoch in range(EPOCHS):
 
-    # ------------------------
-    # Train
-    # ------------------------
 
     model.train()
 
@@ -205,10 +178,6 @@ for epoch in range(EPOCHS):
         ).sum().item()
 
     train_acc = train_correct / len(train_set)
-
-    # ------------------------
-    # Validation
-    # ------------------------
 
     model.eval()
 

@@ -5,7 +5,7 @@ from PIL import Image
 import os
 from pathlib import Path
 
-# Class names matching your data folders
+
 CLASS_NAMES = [
     "Cardboard",
     "Food Organics",
@@ -45,7 +45,7 @@ def load_model(model_path, device):
 
 def predict_image(image_path, model, device):
     """Predict waste category for an image"""
-    # Image preprocessing
+   
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -53,11 +53,11 @@ def predict_image(image_path, model, device):
                             std=[0.229, 0.224, 0.225])
     ])
 
-    # Load and transform image
+    
     image = Image.open(image_path).convert('RGB')
     image_tensor = transform(image).unsqueeze(0).to(device)
 
-    # Make prediction
+   
     with torch.no_grad():
         outputs = model(image_tensor)
         probabilities = torch.nn.functional.softmax(outputs, dim=1)
@@ -69,11 +69,11 @@ def predict_image(image_path, model, device):
     return class_name, confidence_score, probabilities
 
 def main():
-    # Setup
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # Load model
+    
     model_path = "saved_models/best_model.pth"
     if not os.path.exists(model_path):
         print(f"Model not found at {model_path}")
@@ -83,7 +83,7 @@ def main():
     model = load_model(model_path, device)
     print("Model loaded successfully!")
 
-    # Test with first available image from data folder
+    
     data_dir = "data"
     test_image = None
 

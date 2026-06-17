@@ -7,39 +7,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
-# ==========================================
-# PAGE CONFIG
-# ==========================================
-
 st.set_page_config(
     page_title="Waste Classification Pro",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.title("🗑️ Waste Image Classification Pro")
+st.title("Waste Image Classification Pro")
 st.write("Complete ML Solution with XAI & Anomaly Detection")
-
-# ==========================================
-# CLASS NAMES
-# ==========================================
 
 WASTE_CLASSES = [
     "Cardboard", "Food Organics", "Glass", "Metal",
     "Miscellaneous Trash", "Paper", "Plastic", "Textile Trash", "Vegetation"
 ]
 
-GLASS_CLASSES = ["Normal Glass", "Anomalous Glass"]
-
-# ==========================================
-# DEVICE
-# ==========================================
+ANOMALY_CLASSES = {
+    0: "Anomalous Glass",   # broken
+    1: "Normal Glass"       # normal
+}
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# ==========================================
-# PREDICTION FUNCTIONS
-# ==========================================
 
 def predict_waste(image):
     """Predict waste category"""
@@ -74,10 +61,6 @@ def predict_anomaly(image):
         probs = torch.nn.functional.softmax(outputs, dim=1)
     
     return probs
-
-# ==========================================
-# LOAD MODELS
-# ==========================================
 
 @st.cache_resource
 def load_main_model():
@@ -127,25 +110,20 @@ def load_anomaly_model():
     
     return model
 
-# Load models
 main_model = load_main_model()
 anomaly_model = load_anomaly_model()
 
-st.success("✅ Models loaded successfully!")
+st.success("Models loaded successfully!")
 
-# ==========================================
-# SIDEBAR NAVIGATION
-# ==========================================
-
-st.sidebar.header("📱 Navigation")
+st.sidebar.header("Navigation")
 
 page = st.sidebar.radio(
     "Choose a feature:",
     [
-        "🗑️ Waste Classification",
-        "🔍 Anomaly Detection",
-        "🎨 XAI (Grad-CAM)",
-        "ℹ️ About"
+        "Waste Classification",
+        "Anomaly Detection",
+        "XAI (Grad-CAM)",
+        "About"
     ]
 )
 
@@ -153,24 +131,20 @@ st.sidebar.divider()
 
 st.sidebar.info(
     "**Project Overview:**\n\n"
-    "🗑️ Classify waste into 9 categories\n\n"
-    "🔍 Detect anomalies in glass\n\n"
-    "🎨 Explainable AI with Grad-CAM"
+    "Classify waste into 9 categories\n\n"
+    "Detect anomalies in glass\n\n"
+    "Explainable AI with Grad-CAM"
 )
 
-# ==========================================
-# PAGE 1: WASTE CLASSIFICATION
-# ==========================================
-
-if page == "🗑️ Waste Classification":
+if page == "Waste Classification":
     
-    st.header("🗑️ Waste Image Classification")
+    st.header("Waste Image Classification")
     st.write("Upload or select a waste image to classify it into 9 categories")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("📸 Input Image")
+        st.subheader("Input Image")
         
         upload_option = st.radio(
             "Choose input method:",
@@ -199,7 +173,7 @@ if page == "🗑️ Waste Classification":
                 st.caption(f"Sample: {sample_path.parent.name}")
     
     with col2:
-        st.subheader("🎯 Prediction Results")
+        st.subheader("Prediction Results")
         
         if image is not None:
             # Make prediction
@@ -214,7 +188,7 @@ if page == "🗑️ Waste Classification":
                 f"{confidence:.2f}% confidence"
             )
             
-            # Show probabilities
+            
             st.subheader("Class Probabilities")
             prob_data = {
                 WASTE_CLASSES[i]: probs[0, i].item() * 100
@@ -224,7 +198,7 @@ if page == "🗑️ Waste Classification":
             fig, ax = plt.subplots(figsize=(8, 6))
             bars = ax.barh(list(prob_data.keys()), list(prob_data.values()))
             
-            # Color highest bar
+            
             max_idx = list(prob_data.values()).index(max(prob_data.values()))
             bars[max_idx].set_color('#1f77b4')
             for i, bar in enumerate(bars):
@@ -241,19 +215,15 @@ if page == "🗑️ Waste Classification":
         else:
             st.info("Upload or select an image to see predictions")
 
-# ==========================================
-# PAGE 2: ANOMALY DETECTION
-# ==========================================
-
-elif page == "🔍 Anomaly Detection":
+elif page == "Anomaly Detection":
     
-    st.header("🔍 Glass Anomaly Detection")
+    st.header("Glass Anomaly Detection")
     st.write("Detect if glass waste is normal or anomalous")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("📸 Glass Image")
+        st.subheader("Glass Image")
         
         uploaded_file = st.file_uploader(
             "Upload a glass image",
@@ -268,27 +238,48 @@ elif page == "🔍 Anomaly Detection":
             st.image(image, use_column_width=True)
     
     with col2:
-        st.subheader("🎯 Anomaly Detection Results")
+        st.subheader("Anomaly Detection Results")
         
         if image is not None:
-            # Make prediction
-            probs = predict_anomaly(image)
+           
+            waste_probs = predict_waste(image)
+
+            waste_class = waste_probs.argmax(dim=1).item()
+
+            if WASTE_CLASSES[waste_class] != "Glass":
+
+                st.warning(
+                    f"This image is classified as "
+                    f"{WASTE_CLASSES[waste_class]}, not Glass."
+                )
+
+                st.info(
+                    "Anomaly detection only works on Glass images."
+                )
+
+            else:
+
+                probs = predict_anomaly(image)
+
             predicted_class_idx = probs.argmax(dim=1).item()
             confidence = probs[0, predicted_class_idx].item() * 100
             
             # Display prediction with color
-            if predicted_class_idx == 0:  # Normal
-                st.success(f"✅ {GLASS_CLASSES[predicted_class_idx]}")
+            prediction = ANOMALY_CLASSES[predicted_class_idx]
+
+            if predicted_class_idx == 1:  # Normal
+                st.success(prediction)
                 st.metric("Confidence", f"{confidence:.2f}%")
-            else:  # Anomalous
-                st.error(f"⚠️ {GLASS_CLASSES[predicted_class_idx]}")
+
+            else:  # Broken / Anomalous
+                st.error(prediction)
                 st.metric("Confidence", f"{confidence:.2f}%")
             
-            # Show probabilities
+            
             st.subheader("Detection Probabilities")
             prob_data = {
-                GLASS_CLASSES[i]: probs[0, i].item() * 100
-                for i in range(len(GLASS_CLASSES))
+                ANOMALY_CLASSES[i]: probs[0, i].item() * 100
+                for i in range(2)
             }
             
             fig, ax = plt.subplots(figsize=(8, 4))
@@ -313,13 +304,9 @@ elif page == "🔍 Anomaly Detection":
         else:
             st.info("Upload a glass image to detect anomalies")
 
-# ==========================================
-# PAGE 3: XAI (GRAD-CAM)
-# ==========================================
-
-elif page == "🎨 XAI (Grad-CAM)":
+elif page == "XAI (Grad-CAM)":
     
-    st.header("🎨 Explainable AI - Grad-CAM Visualization")
+    st.header("Explainable AI - Grad-CAM Visualization")
     st.write("Understand which regions of the image influenced the model's prediction")
     
     st.info(
@@ -337,7 +324,7 @@ elif page == "🎨 XAI (Grad-CAM)":
     if uploaded_file:
         image = Image.open(uploaded_file).convert('RGB')
         
-        # Make prediction first
+       
         probs = predict_waste(image)
         predicted_class_idx = probs.argmax(dim=1).item()
         confidence = probs[0, predicted_class_idx].item() * 100
@@ -349,7 +336,7 @@ elif page == "🎨 XAI (Grad-CAM)":
             f"{confidence:.2f}% confidence"
         )
         
-        # Simple Grad-CAM implementation
+       
         st.subheader("Attention Visualization")
         
         col1, col2 = st.columns(2)
@@ -361,38 +348,34 @@ elif page == "🎨 XAI (Grad-CAM)":
         with col2:
             st.write("**Attention Heatmap**")
             st.info(
-                "🔴 Red regions = Model focused here\n\n"
-                "🔵 Blue regions = Less attention\n\n"
+                "Red regions = Model focused here\n\n"
+                "Blue regions = Less attention\n\n"
                 "This explains WHY the model made this prediction!"
             )
         
         st.success(
-            f"✅ The model identified '{WASTE_CLASSES[predicted_class_idx]}' "
+            f"The model identified '{WASTE_CLASSES[predicted_class_idx]}' "
             f"with {confidence:.2f}% confidence by focusing on specific regions of the image."
         )
     else:
         st.info("Upload an image to visualize attention regions")
 
-# ==========================================
-# PAGE 4: ABOUT
-# ==========================================
-
-elif page == "ℹ️ About":
+elif page == "About":
     
-    st.header("ℹ️ About This Project")
+    st.header("About This Project")
     
-    st.subheader("🎯 Project Goal")
+    st.subheader("Project Goal")
     st.write(
         "Automatically classify waste images into 9 categories using Deep Learning "
         "with explainable AI for transparency."
     )
     
-    st.subheader("📊 Features")
+    st.subheader("Features")
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.info(
-            "**🗑️ Classification**\n\n"
+            "**Classification**\n\n"
             "Classifies waste into 9 categories:\n\n"
             "• Cardboard\n"
             "• Glass\n"
@@ -404,7 +387,7 @@ elif page == "ℹ️ About":
     
     with col2:
         st.info(
-            "**🔍 Anomaly Detection**\n\n"
+            "**Anomaly Detection**\n\n"
             "Detects unusual/defective waste:\n\n"
             "• Normal glass\n"
             "• Anomalous glass\n\n"
@@ -413,14 +396,14 @@ elif page == "ℹ️ About":
     
     with col3:
         st.info(
-            "**🎨 Explainability**\n\n"
+            "**Explainability**\n\n"
             "Understand model decisions:\n\n"
             "• Grad-CAM heatmaps\n"
             "• Shows attention regions\n\n"
             "Transparent AI!"
         )
     
-    st.subheader("🛠️ Technical Stack")
+    st.subheader("Technical Stack")
     st.write(
         "- **Model:** ResNet50 (Transfer Learning)\n"
         "- **Framework:** PyTorch\n"
@@ -429,7 +412,7 @@ elif page == "ℹ️ About":
         "- **Accuracy:** 77% on waste classification"
     )
     
-    st.subheader("👥 Team")
+    st.subheader("Team")
     st.write(
         "- Sindhuja\n"
         "- Shan\n"
@@ -437,7 +420,7 @@ elif page == "ℹ️ About":
         "- **Project:** Waste Image Classification"
     )
     
-    st.subheader("📈 Model Performance")
+    st.subheader("Model Performance")
     
     metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
     
@@ -449,3 +432,4 @@ elif page == "ℹ️ About":
     
     with metrics_col3:
         st.metric("Anomaly Classes", "2 (Normal/Anomalous)")
+

@@ -10,9 +10,6 @@ from torchvision import models
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
-# --------------------------------------------------
-# Device
-# --------------------------------------------------
 
 device = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
@@ -20,9 +17,6 @@ device = torch.device(
 
 print(f"Using device: {device}")
 
-# --------------------------------------------------
-# Dataset
-# --------------------------------------------------
 
 DATA_DIR = "./glass_anomaly"
 
@@ -56,10 +50,8 @@ dataset = datasets.ImageFolder(
 )
 
 print("Classes:", dataset.classes)
+print("Class Mapping:", dataset.class_to_idx)
 
-# --------------------------------------------------
-# Split Dataset
-# --------------------------------------------------
 
 total = len(dataset)
 
@@ -92,20 +84,20 @@ val_loader = DataLoader(
     num_workers=0
 )
 
-# --------------------------------------------------
-# Model
-# --------------------------------------------------
 
 model = models.resnet50(
     weights=models.ResNet50_Weights.IMAGENET1K_V1
 )
 
-# Freeze backbone
+
+
 
 for param in model.parameters():
     param.requires_grad = False
 
-# Replace classifier
+for param in model.layer4.parameters():
+    param.requires_grad = True
+
 
 in_features = model.fc.in_features
 
@@ -118,20 +110,13 @@ model.fc = nn.Sequential(
 
 model = model.to(device)
 
-# --------------------------------------------------
-# Loss Function & Optimizer
-# --------------------------------------------------
 
 criterion = nn.CrossEntropyLoss()
 
 optimizer = optim.Adam(
-    model.fc.parameters(),
-    lr=0.001
+    filter(lambda p: p.requires_grad, model.parameters()),
+    lr=0.0001
 )
-
-# --------------------------------------------------
-# Training Settings
-# --------------------------------------------------
 
 EPOCHS = 15
 
@@ -142,15 +127,9 @@ os.makedirs(
     exist_ok=True
 )
 
-# --------------------------------------------------
-# Training Loop
-# --------------------------------------------------
 
 for epoch in range(EPOCHS):
 
-    # ----------------------------
-    # Training
-    # ----------------------------
 
     model.train()
 
@@ -183,9 +162,6 @@ for epoch in range(EPOCHS):
 
     train_acc = train_correct / len(train_set)
 
-    # ----------------------------
-    # Validation
-    # ----------------------------
 
     model.eval()
 
@@ -220,9 +196,6 @@ for epoch in range(EPOCHS):
         f"Val Acc: {val_acc:.4f}"
     )
 
-    # ----------------------------
-    # Save Best Model
-    # ----------------------------
 
     if val_acc > best_val_acc:
 
