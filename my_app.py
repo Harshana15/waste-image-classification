@@ -15,15 +15,27 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.title("🗑️ Waste Image Classification Pro")
-st.write("Complete ML Solution with Anomaly Detection & XAI")
+# Top Header with About Link
+col1, col2 = st.columns([0.85, 0.15])
+
+with col1:
+    st.title("Waste Image Classification")
+  #  st.write("Complete ML Solution with Anomaly Detection & XAI")
+
+with col2:
+    st.write("")
+    st.write("")
+    if st.button("About", use_container_width=True, key="about_btn"):
+        st.session_state.show_about = True
 
 WASTE_CLASSES = [
     "Cardboard", "Food Organics", "Glass", "Metal",
     "Miscellaneous Trash", "Paper", "Plastic", "Textile Trash", "Vegetation"
 ]
 
-GLASS_ANOMALY_CLASSES = ["Normal Glass", "Anomalous Glass"]
+# IMPORTANT: Folders are alphabetically ordered: broken=0, normal=1
+GLASS_ANOMALY_CLASSES = ["Anomalous Glass (Broken)", "Normal Glass"]
+PLASTIC_ANOMALY_CLASSES = ["Anomalous Plastic", "Normal Plastic"]
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -56,6 +68,14 @@ def predict_glass_anomaly(image_pil):
         probs = torch.nn.functional.softmax(outputs, dim=1)
     return probs
 
+def predict_plastic_anomaly(image_pil):
+    """Predict plastic anomaly"""
+    image_tensor = transform(image_pil).unsqueeze(0).to(device)
+    with torch.no_grad():
+        outputs = plastic_anomaly_model(image_tensor)
+        probs = torch.nn.functional.softmax(outputs, dim=1)
+    return probs
+
 def predict_for_lime(images):
     """Prediction function for LIME"""
     batch = []
@@ -85,8 +105,8 @@ def generate_gradcam(image_pil, predicted_class_idx):
         activations = output
 
     target_layer = main_model.layer4[-1]
-    target_layer.register_forward_hook(forward_hook)
-    target_layer.register_full_backward_hook(backward_hook)
+    fwd_handle = target_layer.register_forward_hook(forward_hook)
+    bwd_handle = target_layer.register_full_backward_hook(backward_hook)
 
     output = main_model(image_tensor)
     pred_class = output.argmax(dim=1).item()
@@ -97,8 +117,8 @@ def generate_gradcam(image_pil, predicted_class_idx):
     pooled_gradients = torch.mean(gradients, dim=[0, 2, 3])
     activations = activations.squeeze(0)
 
-    for i in range(len(pooled_gradients)):
-        activations[i, :, :] *= pooled_gradients[i]
+    # Use broadcasting instead of loop
+    activations = activations * pooled_gradients.view(-1, 1, 1)
 
     heatmap = torch.mean(activations, dim=0).cpu().detach().numpy()
     heatmap = np.maximum(heatmap, 0)
@@ -112,11 +132,9 @@ def generate_gradcam(image_pil, predicted_class_idx):
 
     superimposed = heatmap_color * 0.4 + img_array
 
-    # Clear hooks
-    for hook in target_layer._forward_hooks.values():
-        hook.remove()
-    for hook in target_layer._backward_hooks.values():
-        hook.remove()
+    # Remove hooks properly
+    fwd_handle.remove()
+    bwd_handle.remove()
 
     return superimposed.astype(np.uint8)
 
@@ -131,7 +149,109 @@ def generate_lime(image_pil, predicted_class_idx):
         predict_for_lime,
         top_labels=1,
         hide_color=0,
-        num_samples=1000
+        num_samples=25
+    )
+
+    temp, mask = explanation.get_image_and_mask(
+        explanation.top_labels[0],
+        positive_only=True,
+        num_features=10,
+        hide_rest=False
+    )
+
+    return mark_boundaries(temp / 255.0, mask)
+
+def predict_for_lime_glass_anomaly(images):
+    """Prediction function for LIME - Glass Anomaly"""
+    batch = []
+    for img in images:
+        pil_img = Image.fromarray(img.astype(np.uint8))
+        tensor = transform(pil_img)
+        batch.append(tensor)
+    batch = torch.stack(batch).to(device)
+    with torch.no_grad():
+        outputs = glass_anomaly_model(batch)
+        probs = torch.softmax(outputs, dim=1)
+    return probs.cpu().numpy()
+
+def predict_for_lime_plastic_anomaly(images):
+    """Prediction function for LIME - Plastic Anomaly"""
+    batch = []
+    for img in images:
+        pil_img = Image.fromarray(img.astype(np.uint8))
+        tensor = transform(pil_img)
+        batch.append(tensor)
+    batch = torch.stack(batch).to(device)
+    with torch.no_grad():
+        outputs = plastic_anomaly_model(batch)
+        probs = torch.softmax(outputs, dim=1)
+    return probs.cpu().numpy()
+
+def generate_gradcam_anomaly(image_pil, model_to_use, model_name):
+    """Generate Grad-CAM for anomaly models"""
+    image_tensor = transform(image_pil).unsqueeze(0).to(device)
+    image_tensor.requires_grad_(True)
+
+    gradients = None
+    activations = None
+
+    def backward_hook(module, grad_input, grad_output):
+        nonlocal gradients
+        gradients = grad_output[0]
+
+    def forward_hook(module, input, output):
+        nonlocal activations
+        activations = output
+
+    target_layer = model_to_use.layer4[-1]
+    fwd_handle = target_layer.register_forward_hook(forward_hook)
+    bwd_handle = target_layer.register_full_backward_hook(backward_hook)
+
+    with torch.enable_grad():
+        output = model_to_use(image_tensor)
+        pred_class = output.argmax(dim=1).item()
+
+        model_to_use.zero_grad()
+        output[:, pred_class].backward()
+
+    if gradients is None or activations is None:
+        fwd_handle.remove()
+        bwd_handle.remove()
+        raise RuntimeError("Failed to capture gradients for Grad-CAM")
+
+    pooled_gradients = torch.mean(gradients, dim=[0, 2, 3])
+    activations = activations.squeeze(0)
+    activations = activations * pooled_gradients.view(-1, 1, 1)
+
+    heatmap = torch.mean(activations, dim=0).cpu().detach().numpy()
+    heatmap = np.maximum(heatmap, 0)
+    heatmap /= heatmap.max()
+
+    img_array = np.array(image_pil.resize((224, 224)))
+    heatmap = cv2.resize(heatmap, (img_array.shape[1], img_array.shape[0]))
+    heatmap = np.uint8(255 * heatmap)
+    heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
+
+    superimposed = heatmap_color * 0.4 + img_array
+
+    fwd_handle.remove()
+    bwd_handle.remove()
+
+    return superimposed.astype(np.uint8)
+
+def generate_lime_anomaly(image_pil, predict_func):
+    """Generate LIME explanation for anomaly models"""
+    image_pil = image_pil.convert("RGB")
+    image_np = np.array(image_pil)
+
+    explainer = lime_image.LimeImageExplainer()
+    explanation = explainer.explain_instance(
+        image_np,
+        predict_func,
+        top_labels=1,
+        hide_color=0,
+        num_samples=25
     )
 
     temp, mask = explanation.get_image_and_mask(
@@ -184,16 +304,38 @@ def load_glass_anomaly_model():
     model.eval()
     return model
 
+@st.cache_resource
+def load_plastic_anomaly_model():
+    """Load plastic anomaly detection model"""
+    model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+    for param in model.parameters():
+        param.requires_grad = False
+    in_features = model.fc.in_features
+    model.fc = nn.Sequential(
+        nn.Linear(in_features, 256),
+        nn.ReLU(),
+        nn.Dropout(0.5),
+        nn.Linear(256, 2)
+    )
+    try:
+        model.load_state_dict(torch.load("saved_models/glass_plastic_model.pth", map_location=device))
+    except:
+        st.warning("Plastic anomaly model not found!")
+    model.to(device)
+    model.eval()
+    return model
+
 main_model = load_main_model()
 glass_anomaly_model = load_glass_anomaly_model()
+plastic_anomaly_model = load_plastic_anomaly_model()
 
-st.success("✅ All models loaded successfully!")
+#st.success("All models loaded successfully!")
 
 # ==========================================
 # UNIFIED DASHBOARD
 # ==========================================
 
-st.subheader("📤 Upload Image to Analyze")
+st.subheader("Upload Image to Analyze")
 
 uploaded_file = st.file_uploader(
     "Upload a waste image",
@@ -209,7 +351,7 @@ if uploaded_file is not None:
     # ==========================================
 
     st.divider()
-    st.header("🗑️ Waste Classification")
+    st.header("Waste Classification")
 
     col1, col2 = st.columns(2)
 
@@ -251,12 +393,12 @@ if uploaded_file is not None:
         st.pyplot(fig, use_container_width=True)
 
     # ==========================================
-    # 2. ANOMALY DETECTION (If Glass)
+    # 2. ANOMALY DETECTION (If Glass or Plastic)
     # ==========================================
 
     if predicted_class_idx == 2:  # Glass
         st.divider()
-        st.header("🔍 Anomaly Detection (Glass)")
+        st.header("Anomaly Detection (Glass)")
 
         anomaly_probs = predict_glass_anomaly(image_pil)
         anomaly_idx = anomaly_probs.argmax(dim=1).item()
@@ -265,10 +407,10 @@ if uploaded_file is not None:
         col1, col2 = st.columns(2)
 
         with col1:
-            if anomaly_idx == 0:
-                st.success(f"✅ {GLASS_ANOMALY_CLASSES[0]}")
-            else:
-                st.error(f"⚠️ {GLASS_ANOMALY_CLASSES[1]}")
+            if anomaly_idx == 1:  # Normal Glass
+                st.success(f" {GLASS_ANOMALY_CLASSES[1]}")
+            else:  # Broken/Anomalous
+                st.error(f" {GLASS_ANOMALY_CLASSES[0]}")
             st.metric("Confidence", f"{anomaly_confidence:.2f}%")
 
         with col2:
@@ -277,11 +419,44 @@ if uploaded_file is not None:
                 GLASS_ANOMALY_CLASSES,
                 [anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]
             )
-            bars[anomaly_idx].set_color('#28a745' if anomaly_idx == 0 else '#dc3545')
+            bars[anomaly_idx].set_color('#28a745' if anomaly_idx == 1 else '#dc3545')
             bars[1 - anomaly_idx].set_color('#d3d3d3')
             ax.set_xlabel('Probability (%)')
             ax.set_xlim(0, 100)
             for i, v in enumerate([anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]):
+                ax.text(v + 1, i, f'{v:.1f}%', va='center')
+            st.pyplot(fig, use_container_width=True)
+
+    elif predicted_class_idx == 6:  # Plastic
+        st.divider()
+        st.header("Verification: Plastic vs Glass")
+        st.write("Confirming this is Plastic, not Glass")
+
+        # Use glass_plastic_model (0=Glass, 1=Plastic)
+        gp_probs = predict_plastic_anomaly(image_pil)
+        gp_idx = gp_probs.argmax(dim=1).item()
+        gp_confidence = gp_probs[0, gp_idx].item() * 100
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if gp_idx == 1:  # Plastic
+                st.success(f"This is Plastic (Not Glass)")
+            else:  # Glass
+                st.warning(f"This might be Glass")
+            st.metric("Confidence", f"{gp_confidence:.2f}%")
+
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            bars = ax.barh(
+                ["Glass", "Plastic"],
+                [gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]
+            )
+            bars[gp_idx].set_color('#28a745')
+            bars[1 - gp_idx].set_color('#d3d3d3')
+            ax.set_xlabel('Probability (%)')
+            ax.set_xlim(0, 100)
+            for i, v in enumerate([gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]):
                 ax.text(v + 1, i, f'{v:.1f}%', va='center')
             st.pyplot(fig, use_container_width=True)
 
@@ -290,8 +465,26 @@ if uploaded_file is not None:
     # ==========================================
 
     st.divider()
-    st.header("✨ Explainable AI (XAI)")
-    st.write("Understanding model predictions with Grad-CAM and LIME")
+
+    # Determine which model to explain
+    if predicted_class_idx == 2:  # Glass
+        st.header(" Explainable AI - Glass Classification & Anomaly")
+        st.write("Understanding glass classification and anomaly detection with Grad-CAM and LIME")
+        explain_model = glass_anomaly_model
+        explain_func = predict_for_lime_glass_anomaly
+        explain_type = "Glass Anomaly"
+    elif predicted_class_idx == 6:  # Plastic
+        st.header("Explainable AI - Why Plastic, Not Glass?")
+        st.write("Understanding why this is classified as Plastic instead of Glass with Grad-CAM and LIME")
+        explain_model = plastic_anomaly_model
+        explain_func = predict_for_lime_plastic_anomaly
+        explain_type = "Plastic vs Glass"
+    else:
+        st.header(" Explainable AI (XAI)")
+        st.write("Understanding model predictions with Grad-CAM and LIME")
+        explain_model = main_model
+        explain_func = predict_for_lime
+        explain_type = "Main Classification"
 
     xai_col1, xai_col2 = st.columns(2)
 
@@ -301,8 +494,11 @@ if uploaded_file is not None:
 
         with st.spinner("Generating Grad-CAM..."):
             try:
-                main_model.eval()
-                gradcam_img = generate_gradcam(image_pil, predicted_class_idx)
+                explain_model.eval()
+                if explain_type in ["Glass Anomaly", "Plastic vs Glass"]:
+                    gradcam_img = generate_gradcam_anomaly(image_pil, explain_model, explain_type)
+                else:
+                    gradcam_img = generate_gradcam(image_pil, predicted_class_idx)
                 st.image(gradcam_img, caption="Grad-CAM Heatmap", use_column_width=True)
             except Exception as e:
                 st.error(f"Grad-CAM Error: {str(e)}")
@@ -311,16 +507,104 @@ if uploaded_file is not None:
         st.subheader("LIME Explanation")
         st.write("Highlights important regions for prediction")
 
-        with st.spinner("Generating LIME..."):
+        with st.spinner("Generating LIME... (this may take a moment)"):
             try:
-                lime_img = generate_lime(image_pil, predicted_class_idx)
+                if explain_type in ["Glass Anomaly", "Plastic vs Glass"]:
+                    lime_img = generate_lime_anomaly(image_pil, explain_func)
+                else:
+                    lime_img = generate_lime(image_pil, predicted_class_idx)
                 st.image(lime_img, caption="LIME Explanation", use_column_width=True)
             except Exception as e:
                 st.error(f"LIME Error: {str(e)}")
 
     st.success(
-        f"✅ Complete! Prediction: **{WASTE_CLASSES[predicted_class_idx]}** ({confidence:.2f}%)"
+        f"Complete! Prediction: **{WASTE_CLASSES[predicted_class_idx]}** ({confidence:.2f}%)"
     )
 
 else:
-    st.info("👆 Upload an image to analyze")
+    st.info(" Upload an image to analyze")
+
+# ==========================================
+# ABOUT SECTION (Sidebar)
+# ==========================================
+
+if st.session_state.get("show_about", False):
+    st.divider()
+    st.header("About This Project")
+
+    st.subheader("Project Goal")
+    st.write(
+        "Automatically classify waste images into 9 categories using Deep Learning "
+        "with explainable AI for transparency and anomaly detection capabilities."
+    )
+
+    st.subheader("Features")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.info(
+            "**Classification**\n\n"
+            "Classifies waste into 9 categories:\n\n"
+            "• Cardboard\n"
+            "• Food Organics\n"
+            "• Glass\n"
+            "• Metal\n"
+            "• Miscellaneous Trash\n"
+            "• Paper\n"
+            "• Plastic\n"
+            "• Textile Trash\n"
+            "• Vegetation"
+        )
+
+    with col2:
+        st.info(
+            "**Anomaly Detection**\n\n"
+            "Detects defective waste:\n\n"
+            "• Glass: Normal vs Broken\n"
+            "• Plastic: Normal vs Damaged\n\n"
+            "Identifies quality issues"
+        )
+
+    with col3:
+        st.info(
+            "**Explainability**\n\n"
+            "Understand model decisions:\n\n"
+            "• Grad-CAM heatmaps\n"
+            "• LIME explanations\n\n"
+            "Transparent AI!"
+        )
+
+    st.subheader(" Technical Stack")
+    st.write(
+        "- **Model:** ResNet50 (Transfer Learning)\n"
+        "- **Framework:** PyTorch\n"
+        "- **Frontend:** Streamlit\n"
+        "- **XAI:** Grad-CAM + LIME\n"
+        "- **Accuracy:** 77% on waste classification"
+    )
+
+    st.subheader(" Team Members")
+    team_info = """
+    - **Sindhuja** 
+    - **Shan** 
+    - **Harshana** 
+
+    **Project:** Waste Image Classification with Explainable AI
+    """
+    st.write(team_info)
+
+    st.subheader("Model Performance")
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
+
+    with metric_col1:
+        st.metric("Classification Accuracy", "77%")
+
+    with metric_col2:
+        st.metric("Categories", "9")
+
+    with metric_col3:
+        st.metric("Anomaly Models", "2 (Glass + Plastic)")
+
+    if st.button("Close About", use_container_width=True):
+        st.session_state.show_about = False
+        st.rerun()
