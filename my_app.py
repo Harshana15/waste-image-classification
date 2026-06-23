@@ -367,6 +367,11 @@ if uploaded_file is not None:
         predicted_class_idx = probs.argmax(dim=1).item()
         confidence = probs[0, predicted_class_idx].item() * 100
 
+    # Track final prediction (may be updated by verification)
+    final_predicted_class_idx = predicted_class_idx
+    final_confidence = confidence
+
+    with col2:
         st.metric(
             "Predicted Class",
             WASTE_CLASSES[predicted_class_idx],
@@ -433,38 +438,6 @@ if uploaded_file is not None:
                 ax.text(v + 1, i, f'{v:.1f}%', va='center')
             st.pyplot(fig, use_container_width=True)
 
-        # If confirmed as Glass, show anomaly detection
-        if gp_idx == 0:  # Glass confirmed
-            st.divider()
-            st.header("Anomaly Detection (Glass)")
-            st.write("Detecting if glass is broken or normal")
-
-            anomaly_probs = predict_glass_anomaly(image_pil)
-            anomaly_idx = anomaly_probs.argmax(dim=1).item()
-            anomaly_confidence = anomaly_probs[0, anomaly_idx].item() * 100
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if anomaly_idx == 1:  # Normal Glass
-                    st.success(f" {GLASS_ANOMALY_CLASSES[1]}")
-                else:  # Broken/Anomalous
-                    st.error(f" {GLASS_ANOMALY_CLASSES[0]}")
-                st.metric("Confidence", f"{anomaly_confidence:.2f}%")
-
-            with col2:
-                fig, ax = plt.subplots(figsize=(8, 4))
-                bars = ax.barh(
-                    GLASS_ANOMALY_CLASSES,
-                    [anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]
-                )
-                bars[anomaly_idx].set_color('#28a745' if anomaly_idx == 1 else '#dc3545')
-                bars[1 - anomaly_idx].set_color('#d3d3d3')
-                ax.set_xlabel('Probability (%)')
-                ax.set_xlim(0, 100)
-                for i, v in enumerate([anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]):
-                    ax.text(v + 1, i, f'{v:.1f}%', va='center')
-                st.pyplot(fig, use_container_width=True)
 
     elif predicted_class_idx == 6:  # Plastic
         st.divider()
@@ -475,6 +448,12 @@ if uploaded_file is not None:
         gp_probs = predict_plastic_anomaly(image_pil)
         gp_idx = gp_probs.argmax(dim=1).item()
         gp_confidence = gp_probs[0, gp_idx].item() * 100
+
+        # Update final prediction based on verification
+        if gp_idx == 0:  # Verification says Glass
+            final_predicted_class_idx = 2  # Glass index
+            final_confidence = gp_confidence
+        # else: keep as Plastic (gp_idx == 1)
 
         col1, col2 = st.columns(2)
 
@@ -505,36 +484,104 @@ if uploaded_file is not None:
         st.info("Anomaly detection is only available for Glass and Plastic categories.")
 
     # ==========================================
-    # 3. EXPLAINABLE AI (Grad-CAM + LIME)
+    # 2B. ANOMALY DETECTION - ALWAYS DISPLAY
     # ==========================================
 
     st.divider()
+    st.header("Anomaly Detection Results")
 
-    # Determine which model to explain
-    if predicted_class_idx == 2:  # Glass
-        st.header(" Explainable AI - Glass Classification & Anomaly")
-        st.write("Understanding glass classification and anomaly detection with Grad-CAM and LIME")
+    if final_predicted_class_idx == 2:  # Glass
+        st.write("Detecting if glass is broken or normal")
+        anomaly_probs = predict_glass_anomaly(image_pil)
+        anomaly_idx = anomaly_probs.argmax(dim=1).item()
+        anomaly_confidence = anomaly_probs[0, anomaly_idx].item() * 100
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if anomaly_idx == 1:  # Normal Glass
+                st.success(f"Status: {GLASS_ANOMALY_CLASSES[1]}")
+            else:  # Broken/Anomalous
+                st.error(f"Status: {GLASS_ANOMALY_CLASSES[0]}")
+            st.metric("Anomaly Confidence", f"{anomaly_confidence:.2f}%")
+
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            bars = ax.barh(
+                GLASS_ANOMALY_CLASSES,
+                [anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]
+            )
+            bars[anomaly_idx].set_color('#28a745' if anomaly_idx == 1 else '#dc3545')
+            bars[1 - anomaly_idx].set_color('#d3d3d3')
+            ax.set_xlabel('Probability (%)')
+            ax.set_xlim(0, 100)
+            for i, v in enumerate([anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]):
+                ax.text(v + 1, i, f'{v:.1f}%', va='center')
+            st.pyplot(fig, use_container_width=True)
+
+    elif final_predicted_class_idx == 6:  # Plastic
+        st.write("Verifying Plastic vs Glass classification")
+        gp_probs = predict_plastic_anomaly(image_pil)
+        gp_idx = gp_probs.argmax(dim=1).item()
+        gp_confidence = gp_probs[0, gp_idx].item() * 100
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if gp_idx == 1:  # Plastic confirmed
+                st.success(f"Verified: This is Plastic")
+            else:  # Actually Glass
+                st.warning(f"Alert: This might be Glass")
+            st.metric("Verification Confidence", f"{gp_confidence:.2f}%")
+
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            bars = ax.barh(
+                ["Glass", "Plastic"],
+                [gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]
+            )
+            bars[gp_idx].set_color('#28a745')
+            bars[1 - gp_idx].set_color('#d3d3d3')
+            ax.set_xlabel('Probability (%)')
+            ax.set_xlim(0, 100)
+            for i, v in enumerate([gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]):
+                ax.text(v + 1, i, f'{v:.1f}%', va='center')
+            st.pyplot(fig, use_container_width=True)
+    else:
+        st.info("Anomaly detection is only available for Glass and Plastic categories.")
+
+    # ==========================================
+    # 3. EXPLAINABLE AI (Grad-CAM + LIME) - VALIDATES PREDICTION
+    # ==========================================
+
+    st.divider()
+    st.header("Explainable AI - XAI Validation")
+
+    # Determine which model to explain (based on final prediction after verification)
+    if final_predicted_class_idx == 2:  # Glass
+        st.write("Validating Glass Classification & Anomaly Detection with Grad-CAM and LIME")
         explain_model = glass_anomaly_model
         explain_func = predict_for_lime_glass_anomaly
         explain_type = "Glass Anomaly"
-    elif predicted_class_idx == 6:  # Plastic
-        st.header("Explainable AI - Why Plastic, Not Glass?")
-        st.write("Understanding why this is classified as Plastic instead of Glass with Grad-CAM and LIME")
+        explain_class_idx = 1  # Normal glass for LIME
+    elif final_predicted_class_idx == 6:  # Plastic
+        st.write("Validating Glass vs Plastic Classification with Grad-CAM and LIME")
         explain_model = plastic_anomaly_model
         explain_func = predict_for_lime_plastic_anomaly
         explain_type = "Plastic vs Glass"
+        explain_class_idx = 1  # Plastic for LIME
     else:
-        st.header(" Explainable AI (XAI)")
-        st.write("Understanding model predictions with Grad-CAM and LIME")
+        st.write("Analyzing Main Classification with Grad-CAM and LIME")
         explain_model = main_model
         explain_func = predict_for_lime
         explain_type = "Main Classification"
+        explain_class_idx = final_predicted_class_idx
 
     xai_col1, xai_col2 = st.columns(2)
 
     with xai_col1:
         st.subheader("Grad-CAM Visualization")
-        st.write("Red = High importance | Blue = Low importance")
+        st.write("Shows which image regions the model focused on (Red = High importance, Blue = Low importance)")
 
         with st.spinner("Generating Grad-CAM..."):
             try:
@@ -548,21 +595,34 @@ if uploaded_file is not None:
                 st.error(f"Grad-CAM Error: {str(e)}")
 
     with xai_col2:
-        st.subheader("LIME Explanation")
-        st.write("Highlights important regions for prediction")
+        st.subheader("LIME Explanation & Validation Confidence")
+        st.write("Shows important feature regions. Confidence % comes from LIME prediction for validation.")
 
         with st.spinner("Generating LIME... (this may take a moment)"):
             try:
                 if explain_type in ["Glass Anomaly", "Plastic vs Glass"]:
                     lime_img = generate_lime_anomaly(image_pil, explain_func)
+                    # Get LIME confidence for validation
+                    lime_probs = explain_func(np.expand_dims(np.array(image_pil.resize((224, 224))), 0))
+                    lime_confidence = lime_probs[0, explain_class_idx] * 100 if explain_type in ["Glass Anomaly", "Plastic vs Glass"] else final_confidence
                 else:
-                    lime_img = generate_lime(image_pil, predicted_class_idx)
-                st.image(lime_img, caption="LIME Explanation", use_column_width=True)
+                    lime_img = generate_lime(image_pil, final_predicted_class_idx)
+                    # Get LIME confidence for validation
+                    lime_probs = explain_func(np.expand_dims(np.array(image_pil.resize((224, 224))), 0))
+                    lime_confidence = lime_probs[0, final_predicted_class_idx] * 100
+
+                # Update final confidence based on XAI validation
+                final_confidence = lime_confidence
+
+                st.image(lime_img, caption="LIME Explanation", use_container_width=True)
+                st.metric("XAI Validation Confidence", f"{lime_confidence:.2f}%")
             except Exception as e:
                 st.error(f"LIME Error: {str(e)}")
 
+    # Final Prediction - Based on XAI Validation
+    st.divider()
     st.success(
-        f"Complete! Prediction: **{WASTE_CLASSES[predicted_class_idx]}** ({confidence:.2f}%)"
+        f"Final Prediction (XAI Validated): **{WASTE_CLASSES[final_predicted_class_idx]}** with {final_confidence:.2f}% confidence"
     )
 
 else:
