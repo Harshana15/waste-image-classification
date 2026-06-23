@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt
 import cv2
 from lime import lime_image
 from skimage.segmentation import mark_boundaries
+import warnings
+
+# Suppress deprecation warnings
+warnings.filterwarnings('ignore')
 
 st.set_page_config(
     page_title="WasteVisionX: Explainable Classification and Anomaly Detection for Waste Sorting",
@@ -356,7 +360,7 @@ if uploaded_file is not None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.image(image_pil, caption="Uploaded Image", use_column_width=True)
+        st.image(image_pil, caption="Uploaded Image", use_container_width=True)
 
     with col2:
         probs = predict_waste(image_pil)
@@ -398,34 +402,69 @@ if uploaded_file is not None:
 
     if predicted_class_idx == 2:  # Glass
         st.divider()
-        st.header("Anomaly Detection (Glass)")
+        st.header("Verification: Glass vs Plastic")
+        st.write("First verifying this is Glass, not Plastic")
 
-        anomaly_probs = predict_glass_anomaly(image_pil)
-        anomaly_idx = anomaly_probs.argmax(dim=1).item()
-        anomaly_confidence = anomaly_probs[0, anomaly_idx].item() * 100
+        # Use glass_plastic_model (0=Glass, 1=Plastic)
+        gp_probs = predict_plastic_anomaly(image_pil)
+        gp_idx = gp_probs.argmax(dim=1).item()
+        gp_confidence = gp_probs[0, gp_idx].item() * 100
 
         col1, col2 = st.columns(2)
 
         with col1:
-            if anomaly_idx == 1:  # Normal Glass
-                st.success(f" {GLASS_ANOMALY_CLASSES[1]}")
-            else:  # Broken/Anomalous
-                st.error(f" {GLASS_ANOMALY_CLASSES[0]}")
-            st.metric("Confidence", f"{anomaly_confidence:.2f}%")
+            if gp_idx == 0:  # Glass confirmed
+                st.success(f"Confirmed: This is Glass")
+            else:  # Actually Plastic
+                st.warning(f"This might be Plastic (Not Glass)")
+            st.metric("Confidence", f"{gp_confidence:.2f}%")
 
         with col2:
             fig, ax = plt.subplots(figsize=(8, 4))
             bars = ax.barh(
-                GLASS_ANOMALY_CLASSES,
-                [anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]
+                ["Glass", "Plastic"],
+                [gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]
             )
-            bars[anomaly_idx].set_color('#28a745' if anomaly_idx == 1 else '#dc3545')
-            bars[1 - anomaly_idx].set_color('#d3d3d3')
+            bars[gp_idx].set_color('#28a745' if gp_idx == 0 else '#dc3545')
+            bars[1 - gp_idx].set_color('#d3d3d3')
             ax.set_xlabel('Probability (%)')
             ax.set_xlim(0, 100)
-            for i, v in enumerate([anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]):
+            for i, v in enumerate([gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]):
                 ax.text(v + 1, i, f'{v:.1f}%', va='center')
             st.pyplot(fig, use_container_width=True)
+
+        # If confirmed as Glass, show anomaly detection
+        if gp_idx == 0:  # Glass confirmed
+            st.divider()
+            st.header("Anomaly Detection (Glass)")
+            st.write("Detecting if glass is broken or normal")
+
+            anomaly_probs = predict_glass_anomaly(image_pil)
+            anomaly_idx = anomaly_probs.argmax(dim=1).item()
+            anomaly_confidence = anomaly_probs[0, anomaly_idx].item() * 100
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if anomaly_idx == 1:  # Normal Glass
+                    st.success(f" {GLASS_ANOMALY_CLASSES[1]}")
+                else:  # Broken/Anomalous
+                    st.error(f" {GLASS_ANOMALY_CLASSES[0]}")
+                st.metric("Confidence", f"{anomaly_confidence:.2f}%")
+
+            with col2:
+                fig, ax = plt.subplots(figsize=(8, 4))
+                bars = ax.barh(
+                    GLASS_ANOMALY_CLASSES,
+                    [anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]
+                )
+                bars[anomaly_idx].set_color('#28a745' if anomaly_idx == 1 else '#dc3545')
+                bars[1 - anomaly_idx].set_color('#d3d3d3')
+                ax.set_xlabel('Probability (%)')
+                ax.set_xlim(0, 100)
+                for i, v in enumerate([anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]):
+                    ax.text(v + 1, i, f'{v:.1f}%', va='center')
+                st.pyplot(fig, use_container_width=True)
 
     elif predicted_class_idx == 6:  # Plastic
         st.divider()
@@ -504,7 +543,7 @@ if uploaded_file is not None:
                     gradcam_img = generate_gradcam_anomaly(image_pil, explain_model, explain_type)
                 else:
                     gradcam_img = generate_gradcam(image_pil, predicted_class_idx)
-                st.image(gradcam_img, caption="Grad-CAM Heatmap", use_column_width=True)
+                st.image(gradcam_img, caption="Grad-CAM Heatmap", use_container_width=True)
             except Exception as e:
                 st.error(f"Grad-CAM Error: {str(e)}")
 
