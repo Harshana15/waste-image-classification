@@ -10,7 +10,7 @@ from lime import lime_image
 from skimage.segmentation import mark_boundaries
 
 st.set_page_config(
-    page_title="Waste Classification Pro",
+    page_title="WasteVisionX: Explainable Classification and Anomaly Detection for Waste Sorting",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -459,6 +459,11 @@ if uploaded_file is not None:
             for i, v in enumerate([gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]):
                 ax.text(v + 1, i, f'{v:.1f}%', va='center')
             st.pyplot(fig, use_container_width=True)
+
+    else:
+        st.divider()
+        st.header("Anomaly Detection")
+        st.info("Anomaly detection is only available for Glass and Plastic categories.")
 
     # ==========================================
     # 3. EXPLAINABLE AI (Grad-CAM + LIME)
