@@ -422,7 +422,7 @@ with col1:
         gp_idx = gp_probs.argmax(dim=1).item()
         gp_confidence = gp_probs[0, gp_idx].item() * 100
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
 
         with col1:
             if gp_idx == 0:  # Glass confirmed
@@ -431,7 +431,7 @@ with col1:
                 st.warning(f"This might be Plastic (Not Glass)")
             st.metric("Confidence", f"{gp_confidence:.2f}%")
 
-        with col1:
+        with col2:
             fig, ax = plt.subplots(figsize=(8, 4))
             bars = ax.barh(
                 ["Glass", "Plastic"],
