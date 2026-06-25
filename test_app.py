@@ -25,7 +25,7 @@ col1, col2 = st.columns([0.85, 0.15])
 with col1:
     st.markdown(
         """
-        <h1 style='font-size:20px;'>
+        <h1 style='font-size:16px; margin-top: -30px; margin-bottom: 5px;'>
             WasteVisionX: Explainable Classification and Anomaly Detection for Waste Sorting
         </h1>
         """,
@@ -350,25 +350,21 @@ plastic_anomaly_model = load_plastic_anomaly_model()
 col1, col2 = st.columns(2)
 with col1:
 
-    st.subheader("Upload Image to Analyze")
+    st.markdown("<p style='font-size: 14px; font-weight: bold; margin-top: -15px;'>Upload Image to Analyze</p>", unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
-        "Choose an image file (jpg, jpeg, png)",
-        type=["jpg", "jpeg", "png"]
+        "Choose file",
+        type=["jpg", "jpeg", "png"],
+        label_visibility="collapsed"
     )
 with col2:
     if uploaded_file is not None:
         image_pil = Image.open(uploaded_file).convert('RGB')
         image_np = np.array(image_pil)
-    st.image(image_pil, caption="Uploaded Image", use_container_width=True)
+        st.image(image_pil, caption="Uploaded Image", width=100)
 
-with col1:
-    st.divider()
-    st.header("Waste Classification")
-
-
-        
-
+if uploaded_file is not None:
+    p1_col, p2_col, p3_col = st.columns(3)
 
     probs = predict_waste(image_pil)
     predicted_class_idx = probs.argmax(dim=1).item()
@@ -378,20 +374,18 @@ with col1:
     final_predicted_class_idx = predicted_class_idx
     final_confidence = confidence
 
-    with col1:
-        st.metric(
-            "Predicted Class",
-            WASTE_CLASSES[predicted_class_idx],
-            f"{confidence:.2f}% confidence"
-        )
+    with p1_col:
+        st.markdown("<p style='font-size: 11px; font-weight: bold; margin: -10px 0 1px 0;'>Waste Classification</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size: 11px; font-weight: bold; margin: 1px 0;'>{WASTE_CLASSES[predicted_class_idx]}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='font-size: 8px; margin: 0 0 2px 0;'>↑ {confidence:.2f}%</p>", unsafe_allow_html=True)
 
-        st.write("**Class Probabilities:**")
+        st.markdown("<p style='font-size: 7px; font-weight: bold; margin: 1px 0;'>Probabilities</p>", unsafe_allow_html=True)
         prob_data = {
             WASTE_CLASSES[i]: probs[0, i].item() * 100
             for i in range(len(WASTE_CLASSES))
         }
 
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(5, 1.8))
         bars = ax.barh(list(prob_data.keys()), list(prob_data.values()))
 
         max_idx = list(prob_data.values()).index(max(prob_data.values()))
@@ -408,31 +402,27 @@ with col1:
 
         st.pyplot(fig, use_container_width=True)
 
-    # ==========================================
-    # 2. ANOMALY DETECTION (If Glass or Plastic)
-    # ==========================================
+    with p2_col:
+        # ==========================================
+        # P2. GLASS VS PLASTIC VERIFICATION
+        # ==========================================
 
-    if predicted_class_idx == 2:  # Glass
-        st.divider()
-        st.header("Glass vs Plastic - Verification")
-        st.write("Re - Confirming if the detected class is Glass or Plastic")
+        if predicted_class_idx == 2:  # Glass
+            st.markdown("<p style='font-size: 11px; font-weight: bold; margin: -10px 0 1px 0;'>Glass vs Plastic</p>", unsafe_allow_html=True)
 
-        # Use glass_plastic_model (0=Glass, 1=Plastic)
-        gp_probs = predict_plastic_anomaly(image_pil)
-        gp_idx = gp_probs.argmax(dim=1).item()
-        gp_confidence = gp_probs[0, gp_idx].item() * 100
+            # Use glass_plastic_model (0=Glass, 1=Plastic)
+            gp_probs = predict_plastic_anomaly(image_pil)
+            gp_idx = gp_probs.argmax(dim=1).item()
+            gp_confidence = gp_probs[0, gp_idx].item() * 100
 
-        col1, col2 = st.columns(2)
-
-        with col1:
             if gp_idx == 0:  # Glass confirmed
-                st.success(f"Confirmed: This is Glass")
+                st.markdown(f"<p style='font-size: 11px; font-weight: bold; margin: 1px 0;'>Glass</p>", unsafe_allow_html=True)
             else:  # Actually Plastic
-                st.warning(f"This might be Plastic (Not Glass)")
-            st.metric("Confidence", f"{gp_confidence:.2f}%")
+                st.markdown(f"<p style='font-size: 11px; font-weight: bold; margin: 1px 0;'>Plastic</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 8px; margin: 0 0 2px 0;'>↑ {gp_confidence:.2f}%</p>", unsafe_allow_html=True)
 
-        with col2:
-            fig, ax = plt.subplots(figsize=(8, 4))
+            st.markdown("<p style='font-size: 7px; font-weight: bold; margin: 1px 0;'>Probabilities</p>", unsafe_allow_html=True)
+            fig, ax = plt.subplots(figsize=(3.5, 1.2))
             bars = ax.barh(
                 ["Glass", "Plastic"],
                 [gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]
@@ -445,34 +435,27 @@ with col1:
                 ax.text(v + 1, i, f'{v:.1f}%', va='center')
             st.pyplot(fig, use_container_width=True)
 
+        elif predicted_class_idx == 6:  # Plastic
+            st.markdown("<p style='font-size: 11px; font-weight: bold; margin: -10px 0 1px 0;'>Glass vs Plastic</p>", unsafe_allow_html=True)
 
-    elif predicted_class_idx == 6:  # Plastic
-        st.divider()
-        st.header("Glass vs Plastic - Verification")
-        st.write("Re - Confirming if the detected class is Glass or Plastic")
+            # Use glass_plastic_model (0=Glass, 1=Plastic)
+            gp_probs = predict_plastic_anomaly(image_pil)
+            gp_idx = gp_probs.argmax(dim=1).item()
+            gp_confidence = gp_probs[0, gp_idx].item() * 100
 
-        # Use glass_plastic_model (0=Glass, 1=Plastic)
-        gp_probs = predict_plastic_anomaly(image_pil)
-        gp_idx = gp_probs.argmax(dim=1).item()
-        gp_confidence = gp_probs[0, gp_idx].item() * 100
+            # Update final prediction based on verification
+            if gp_idx == 0:  # Verification says Glass
+                final_predicted_class_idx = 2  # Glass index
+                final_confidence = gp_confidence
 
-        # Update final prediction based on verification
-        if gp_idx == 0:  # Verification says Glass
-            final_predicted_class_idx = 2  # Glass index
-            final_confidence = gp_confidence
-        # else: keep as Plastic (gp_idx == 1)
-
-        col1, col2 = st.columns(2)
-
-        with col1:
             if gp_idx == 1:  # Plastic
-                st.success(f"This is Plastic (Not Glass)")
+                st.markdown(f"<p style='font-size: 11px; font-weight: bold; margin: 1px 0;'>Plastic</p>", unsafe_allow_html=True)
             else:  # Glass
-                st.warning(f"This might be Glass")
-            st.metric("Confidence", f"{gp_confidence:.2f}%")
+                st.markdown(f"<p style='font-size: 11px; font-weight: bold; margin: 1px 0;'>Glass</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 8px; margin: 0 0 2px 0;'>↑ {gp_confidence:.2f}%</p>", unsafe_allow_html=True)
 
-        with col2:
-            fig, ax = plt.subplots(figsize=(8, 4))
+            st.markdown("<p style='font-size: 7px; font-weight: bold; margin: 1px 0;'>Probabilities</p>", unsafe_allow_html=True)
+            fig, ax = plt.subplots(figsize=(3.5, 1.2))
             bars = ax.barh(
                 ["Glass", "Plastic"],
                 [gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]
@@ -485,39 +468,28 @@ with col1:
                 ax.text(v + 1, i, f'{v:.1f}%', va='center')
             st.pyplot(fig, use_container_width=True)
 
-    else:
-        st.divider()
-        st.header("Glass vs Plastic - Verification")
-        st.write("Re - Confirming if the detected class is Glass or Plastic")
+        else:
+            st.markdown("<p style='font-size: 11px; font-weight: bold; margin: -10px 0 1px 0;'>Glass vs Plastic</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 7px; margin: 1px 0;'>Only for Glass & Plastic</p>", unsafe_allow_html=True)
 
-        st.info(
-                f"Detected as {WASTE_CLASSES[predicted_class_idx]} so Glass vs Plastic verification is not applicable."
-            )
+    with p3_col:
+        # ==========================================
+        # P3. ANOMALY DETECTION
+        # ==========================================
 
-    # ==========================================
-    # 2B. ANOMALY DETECTION - ALWAYS DISPLAY
-    # ==========================================
+        if final_predicted_class_idx == 2:  # Glass
+            st.markdown("<p style='font-size: 11px; font-weight: bold; margin: -10px 0 1px 0;'>Anomaly Detection</p>", unsafe_allow_html=True)
 
-    st.divider()
-    st.header("Anomaly Detection")
+            anomaly_probs = predict_glass_anomaly(image_pil)
+            anomaly_idx = anomaly_probs.argmax(dim=1).item()
+            anomaly_confidence = anomaly_probs[0, anomaly_idx].item() * 100
 
-    if final_predicted_class_idx == 2:  # Glass
-        st.write("Detecting if glass is broken or normal")
-        anomaly_probs = predict_glass_anomaly(image_pil)
-        anomaly_idx = anomaly_probs.argmax(dim=1).item()
-        anomaly_confidence = anomaly_probs[0, anomaly_idx].item() * 100
+            status_text = GLASS_ANOMALY_CLASSES[anomaly_idx]
+            st.markdown(f"<p style='font-size: 11px; font-weight: bold; margin: 1px 0;'>{status_text}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 8px; margin: 0 0 2px 0;'>↑ {anomaly_confidence:.2f}%</p>", unsafe_allow_html=True)
 
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if anomaly_idx == 1:  # Normal Glass
-                st.success(f"Status: {GLASS_ANOMALY_CLASSES[1]}")
-            else:  # Broken/Anomalous
-                st.error(f"Status: {GLASS_ANOMALY_CLASSES[0]}")
-            st.metric("Anomaly Confidence", f"{anomaly_confidence:.2f}%")
-
-        with col2:
-            fig, ax = plt.subplots(figsize=(8, 4))
+            st.markdown("<p style='font-size: 7px; font-weight: bold; margin: 1px 0;'>Probabilities</p>", unsafe_allow_html=True)
+            fig, ax = plt.subplots(figsize=(3.5, 1.2))
             bars = ax.barh(
                 GLASS_ANOMALY_CLASSES,
                 [anomaly_probs[0, 0].item() * 100, anomaly_probs[0, 1].item() * 100]
@@ -530,44 +502,16 @@ with col1:
                 ax.text(v + 1, i, f'{v:.1f}%', va='center')
             st.pyplot(fig, use_container_width=True)
 
-    elif final_predicted_class_idx == 6:  # Plastic
-        st.write("Verifying Plastic vs Glass classification")
-        gp_probs = predict_plastic_anomaly(image_pil)
-        gp_idx = gp_probs.argmax(dim=1).item()
-        gp_confidence = gp_probs[0, gp_idx].item() * 100
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if gp_idx == 1:  # Plastic confirmed
-                st.success(f"Verified: This is Plastic")
-            else:  # Actually Glass
-                st.warning(f"Alert: This might be Glass")
-            st.metric("Verification Confidence", f"{gp_confidence:.2f}%")
-
-        with col2:
-            fig, ax = plt.subplots(figsize=(8, 4))
-            bars = ax.barh(
-                ["Glass", "Plastic"],
-                [gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]
-            )
-            bars[gp_idx].set_color('#28a745')
-            bars[1 - gp_idx].set_color('#d3d3d3')
-            ax.set_xlabel('Probability (%)')
-            ax.set_xlim(0, 100)
-            for i, v in enumerate([gp_probs[0, 0].item() * 100, gp_probs[0, 1].item() * 100]):
-                ax.text(v + 1, i, f'{v:.1f}%', va='center')
-            st.pyplot(fig, use_container_width=True)
-    else:
-        st.info("Anomaly detection is only available for Glass and Plastic categories.")
+        else:
+            st.markdown("<p style='font-size: 11px; font-weight: bold; margin: -10px 0 1px 0;'>Anomaly Detection</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 7px; margin: 1px 0;'>Only for Glass</p>", unsafe_allow_html=True)
 
     # ==========================================
-    # 3. EXPLAINABLE AI (Grad-CAM + LIME) - VALIDATES PREDICTION
+    # EXPLAINABLE AI (Grad-CAM + LIME) - VALIDATES PREDICTION
     # ==========================================
 
-    st.divider()
-    st.header("Explainable AI (XAI Validation)")
-    st.write("Validating the classified class detection with Grad-CAM and LIME")
+    st.markdown("<p style='font-size: 16px; font-weight: bold; margin-top: -10px;'>Explainable AI (XAI Validation)</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 11px;'>Validating the classified class detection with Grad-CAM and LIME</p>", unsafe_allow_html=True)
 
     # Determine which model to explain (based on final prediction after verification)
     if final_predicted_class_idx == 2:  # Glass
@@ -591,50 +535,47 @@ with col1:
     xai_col1, xai_col2 = st.columns(2)
 
     with xai_col1:
-        st.subheader("Grad-CAM Visualization")
-        st.write("Shows which image regions the model focused on (Red = High importance, Blue = Low importance)")
+        st.markdown("<p style='font-size: 13px; font-weight: bold;'>Grad-CAM Visualization</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 10px;'>Shows which image regions the model focused on</p>", unsafe_allow_html=True)
 
-        with st.spinner("Generating Grad-CAM..."):
-            try:
-                explain_model.eval()
-                if explain_type in ["Glass Anomaly", "Plastic vs Glass"]:
-                    gradcam_img = generate_gradcam_anomaly(image_pil, explain_model, explain_type)
-                else:
-                    gradcam_img = generate_gradcam(image_pil, predicted_class_idx)
-                st.image(gradcam_img, caption="Grad-CAM Heatmap", use_container_width=True)
-            except Exception as e:
-                st.error(f"Grad-CAM Error: {str(e)}")
+    with st.spinner("Generating Grad-CAM..."):
+        try:
+            explain_model.eval()
+            if explain_type in ["Glass Anomaly", "Plastic vs Glass"]:
+                gradcam_img = generate_gradcam_anomaly(image_pil, explain_model, explain_type)
+            else:
+                gradcam_img = generate_gradcam(image_pil, predicted_class_idx)
+            st.image(gradcam_img, caption="Grad-CAM", width=200)
+        except Exception as e:
+            st.error(f"Grad-CAM Error: {str(e)}")
 
     with xai_col2:
-        st.subheader("LIME Explanation")
-        st.write("Shows important feature regions. Confidence % comes from LIME prediction after validation.")
+        st.markdown("<p style='font-size: 13px; font-weight: bold;'>LIME Explanation</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 10px;'>Shows important feature regions</p>", unsafe_allow_html=True)
 
-        with st.spinner("Generating LIME... (this may take a moment)"):
-            try:
-                if explain_type in ["Glass Anomaly", "Plastic vs Glass"]:
-                    lime_img = generate_lime_anomaly(image_pil, explain_func)
-                    # Get LIME confidence for validation
-                    lime_probs = explain_func(np.expand_dims(np.array(image_pil.resize((224, 224))), 0))
-                    lime_confidence = lime_probs[0, explain_class_idx] * 100 if explain_type in ["Glass Anomaly", "Plastic vs Glass"] else final_confidence
-                else:
-                    lime_img = generate_lime(image_pil, final_predicted_class_idx)
-                    # Get LIME confidence for validation
-                    lime_probs = explain_func(np.expand_dims(np.array(image_pil.resize((224, 224))), 0))
-                    lime_confidence = lime_probs[0, final_predicted_class_idx] * 100
+    with st.spinner("Generating LIME... (this may take a moment)"):
+        try:
+            if explain_type in ["Glass Anomaly", "Plastic vs Glass"]:
+                lime_img = generate_lime_anomaly(image_pil, explain_func)
+                # Get LIME confidence for validation
+                lime_probs = explain_func(np.expand_dims(np.array(image_pil.resize((224, 224))), 0))
+                lime_confidence = lime_probs[0, explain_class_idx] * 100 if explain_type in ["Glass Anomaly", "Plastic vs Glass"] else final_confidence
+            else:
+                lime_img = generate_lime(image_pil, final_predicted_class_idx)
+                # Get LIME confidence for validation
+                lime_probs = explain_func(np.expand_dims(np.array(image_pil.resize((224, 224))), 0))
+                lime_confidence = lime_probs[0, final_predicted_class_idx] * 100
 
-                # Update final confidence based on XAI validation
-                final_confidence = lime_confidence
+            # Update final confidence based on XAI validation
+            final_confidence = lime_confidence
 
-                st.image(lime_img, caption="LIME Explanation", use_container_width=True)
-                st.metric("XAI LIMEValidation Confidence", f"{lime_confidence:.2f}%")
-            except Exception as e:
-                st.error(f"LIME Error: {str(e)}")
+            st.image(lime_img, caption="LIME", width=200)
+            st.markdown(f"<p style='font-size: 10px; margin-top: 5px;'>Confidence: {lime_confidence:.2f}%</p>", unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"LIME Error: {str(e)}")
 
     # Final Prediction - Based on XAI Validation
-    st.divider()
-    st.success(
-        f"Final Prediction: **{WASTE_CLASSES[final_predicted_class_idx]}**"
-    )
+    st.markdown("<p style='font-size: 16px; font-weight: bold; color: #0f8c3a; margin-top: 15px;'>✓ Final Prediction: {}</p>".format(WASTE_CLASSES[final_predicted_class_idx]), unsafe_allow_html=True)
 
 #else:
     #st.info(" Upload an image to analyze")
