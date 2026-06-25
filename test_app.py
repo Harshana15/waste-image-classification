@@ -575,7 +575,7 @@ if uploaded_file is not None:
             st.error(f"LIME Error: {str(e)}")
 
     # Final Prediction - Based on XAI Validation
-    st.markdown("<p style='font-size: 16px; font-weight: bold; color: #0f8c3a; margin-top: 15px;'>✓ Final Prediction: {}</p>".format(WASTE_CLASSES[final_predicted_class_idx]), unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 16px; font-weight: bold; color: #0f8c3a; margin-top: 15px;'>Final Prediction: {}</p>".format(WASTE_CLASSES[final_predicted_class_idx]), unsafe_allow_html=True)
 
 #else:
     #st.info(" Upload an image to analyze")
